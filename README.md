@@ -19,7 +19,8 @@ Para isto foram criadas 4 tasks:
 * Ler os botões A e B para ativar/desativar as duas tarefas anteriores
 * Exibir o status das tarefas, do led e do buzzer no display OLED
 
-##Lista de periféricos utilizados
+## Lista de periféricos utilizados
+
 |Periférico    | Conexão na BitDogLab|
 |--------------|---------------------|
 | Botões A e B | GP5 e GP6           |
@@ -27,7 +28,8 @@ Para isto foram criadas 4 tasks:
 |LED RGB       | GP13(R),GP11(G),GP12(B)|
 |Display OLED  | GP14(SDA), GP15(SCL)|
 
-##Lógica
+## Lógica
+
 O código envolve a criação de 4 funções, display_task(), led_task(), buzzer_task() e button_task(), responsável por cada um dos quatro periféricos.
 * led_task(): Oscila o led RGB entre as cores vermelho, verde e azul a cada execução
 * buzzer_task(): Emite um beep de 250ms com os dois buzzers da BitDogLab e então espera 2 segundos antes de tocar novamente
@@ -42,7 +44,7 @@ Após esse acionamento, o programa irá executar as tasks ativadas, exibindo no 
 
 Video: https://www.youtube.com/shorts/j6pyCCiNvGw
 
-##Reflexões
+## Reflexões
 
 1)O que acontece se todas as tarefas tiverem a mesma prioridade?
 
