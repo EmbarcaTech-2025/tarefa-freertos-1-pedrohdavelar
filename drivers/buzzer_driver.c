@@ -4,78 +4,96 @@
 
 
 void pwm_init_buzzer() {
-    gpio_set_function(BUZZER_PIN_1, GPIO_FUNC_PWM);
-    gpio_set_function(BUZZER_PIN_2, GPIO_FUNC_PWM);
-    
-    uint sliceNum1 = pwm_gpio_to_slice_num(BUZZER_PIN_1);
-    uint sliceNum2 = pwm_gpio_to_slice_num(BUZZER_PIN_2);
-
-    pwm_config config = pwm_get_default_config();
-    
-    uint32_t wrap = clock_get_hz(clk_sys) / PWM_FREQUENCY;
-    pwm_config_set_wrap(&config, wrap);
-    
-    pwm_config_set_clkdiv(&config, 1.0f);
-    pwm_init(sliceNum1, &config, true);
-    pwm_init(sliceNum2, &config, true);
+    gpio_set_function(BUZZER_A_PIN, GPIO_FUNC_PWM);
+    gpio_set_function(BUZZER_B_PIN, GPIO_FUNC_PWM);
+    uint slice_a = pwm_gpio_to_slice_num(BUZZER_A_PIN);
+    uint slice_b = pwm_gpio_to_slice_num(BUZZER_B_PIN);
+    pwm_set_enabled(slice_a, true);
+    pwm_set_enabled(slice_b, true);
 }
 
+void set_buzzer_frequency(int gpio_pin, uint32_t freq) {
+    uint slice_num = pwm_gpio_to_slice_num(gpio_pin);
 
-
-// Play a single sample (modified version)
-void play_sample(uint16_t sample_value) {
-    uint32_t boostedSample = (uint32_t)(sample_value * GAIN_RATE);
-    if (boostedSample > 4095) {
-        boostedSample = 4095; // Clamp to max 12-bit value
-    }
-    
-    // Convert 12-bit ADC sample to PWM duty cycle
-    uint slice_num = pwm_gpio_to_slice_num(BUZZER_PIN_1);
-    uint32_t pwm_top = pwm_hw->slice[slice_num].top;
-    uint32_t level = (boostedSample * (pwm_top + 1)) / 4095; 
-    
-    pwm_set_gpio_level(BUZZER_PIN_1, level);
-    pwm_set_gpio_level(BUZZER_PIN_2, level);
-    
-    // Wait for exactly one sample period (125µs for 8kHz)
-    busy_wait_us(1000000/SAMPLING_RATE);
-}
-
-// Play a complete tone (optimized)
-void play_tone(uint16_t *data, size_t size) {
-    printf("Playing tone with %zu samples...\n", size);
-    absolute_time_t start_time = get_absolute_time();
-    
-    for(size_t i = 0; i < size; i++) {
-        play_sample(data[i]);
-    }
-    
-    int64_t duration_us = absolute_time_diff_us(start_time, get_absolute_time());
-    printf("Tone completed in %.2f ms\n", duration_us/1000.0f);
-}
-
-void play_beep(uint16_t frequency, uint duration_ms) {
-    // Calculate how many samples we need for the requested duration
-    size_t num_samples = (SAMPLING_RATE * duration_ms) / 1000;
-    
-    // Create a buffer for the generated tone
-    uint16_t *tone_buffer = (uint16_t *)malloc(num_samples * sizeof(uint16_t));
-    if (!tone_buffer) {
-        printf("Error allocating tone buffer!\n");
+    if (freq == 0) {
+        // A frequency of 0 means silence, so we set the duty cycle to 0.
+        pwm_set_gpio_level(gpio_pin, 0);
         return;
     }
     
-    // Fill buffer with the requested frequency
-    for (size_t i = 0; i < num_samples; ++i) {
-        // For a pure tone, we could generate a sine wave here
-        // But for a simple buzzer, we'll just use the frequency directly
-        tone_buffer[i] = frequency;
+    // The system clock is typically 125,000,000 Hz
+    uint32_t clock = clock_get_hz(clk_sys);
+    
+    // Formula to calculate the divider to get max resolution (wrap value)
+    uint32_t divider16 = clock / freq / 4096 + (clock % (freq * 4096)!= 0);
+    if (divider16 / 16 == 0) {
+        divider16 = 16;
     }
-    
-    // Play the generated tone
-    printf("Playing %dHz beep for %dms...\n", frequency, duration_ms);
-    play_tone(tone_buffer, num_samples);
-    
-    // Clean up
-    free(tone_buffer);
+
+    // Calculate the wrap value for the given frequency and divider
+    uint32_t wrap = clock * 16 / divider16 / freq - 1;
+
+    pwm_set_clkdiv_int_frac(slice_num, divider16 / 16, divider16 & 0xF);
+    pwm_set_wrap(slice_num, wrap);
+
+    // Set duty cycle to 50% for a standard square wave tone
+    pwm_set_gpio_level(gpio_pin, wrap / 2);
+}
+
+// --- Monophonic (Single Buzzer) Mode ---
+
+// Plays a simple beep at a fixed frequency
+void beep(uint gpio_pin, int duration_ms) {
+    set_buzzer_frequency(gpio_pin, 1000); // 1kHz beep
+    busy_wait_ms(duration_ms);
+    pwm_set_gpio_level(gpio_pin, 0);
+}
+
+void double_beep(int duration_ms) {
+    set_buzzer_frequency(BUZZER_A_PIN, 1000); // 1kHz beep
+    set_buzzer_frequency(BUZZER_B_PIN, 1500); // 1.5kHz beep
+    busy_wait_ms(duration_ms);
+    pwm_set_gpio_level(BUZZER_A_PIN, 0);
+    pwm_set_gpio_level(BUZZER_B_PIN, 0);
+}
+
+// Plays a single note for a given duration on one buzzer
+void play_note(int gpio_pin, int frequency, int duration_ms) {
+    set_buzzer_frequency(gpio_pin, frequency);
+    busy_wait_ms(duration_ms);
+    pwm_set_gpio_level(gpio_pin, 0); // Silence buzzer after note
+}
+
+void play_notes(int frequency1, int frequency2, int duration_ms) {
+    set_buzzer_frequency(BUZZER_A_PIN, frequency1);
+    set_buzzer_frequency(BUZZER_B_PIN, frequency2);
+    busy_wait_ms(duration_ms);
+    pwm_set_gpio_level(BUZZER_A_PIN, 0); // Silence buzzer A
+    pwm_set_gpio_level(BUZZER_B_PIN, 0); // Silence buzzer B
+}
+
+// Plays a melody from an array of Note structs on one buzzer
+void play_melody(int gpio_pin,const Note melody[], int length) {
+    for (int i = 0; i < length; i++) {
+        play_note(gpio_pin, melody[i].frequency, melody[i].duration_ms);
+        // A small pause between notes can make them more distinct
+        busy_wait_ms(20);
+    }
+}
+
+// --- Polyphonic (Dual Buzzer) Mode ---
+
+// Plays a harmony melody from an array of HarmonyNote structs
+void play_harmony_melody(const HarmonyNote melody[], int length) {
+    for (int i = 0; i < length; i++) {
+        // Set frequencies for both buzzers simultaneously
+        set_buzzer_frequency(BUZZER_A_PIN, melody[i].frequency1);
+        set_buzzer_frequency(BUZZER_B_PIN, melody[i].frequency2);
+
+        // Wait for the shared duration
+        busy_wait_ms(melody[i].duration_ms);
+    }
+    // Silence both buzzers at the end of the melody
+    pwm_set_gpio_level(BUZZER_A_PIN, 0);
+    pwm_set_gpio_level(BUZZER_B_PIN, 0);
 }
