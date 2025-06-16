@@ -8,7 +8,7 @@
 #define A_BUTTON_PIN 5
 #define B_BUTTON_PIN 6
 #define J_BUTTON_PIN 22
-#define DEBOUNCE_TIME_MS 125
+#define DEBOUNCE_TIME_MS 175
 
 typedef struct {
     uint8_t gpioPin;

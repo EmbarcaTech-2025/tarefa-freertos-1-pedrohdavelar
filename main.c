@@ -1,6 +1,8 @@
 //Bibliotecas FreeRTOS
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h" 
+
 #include <stdio.h>
 
 //Bibliotecas padrão do Pico SDK
@@ -20,6 +22,10 @@
 //Handles das tarefas
 TaskHandle_t led_task_handle = NULL;
 TaskHandle_t buzzer_task_handle = NULL;
+
+//Semaforos das tarefas
+SemaphoreHandle_t xLedSemaphore;    
+SemaphoreHandle_t xBuzzerSemaphore; 
 
 //situação daas tarefas
 bool led_task_running = true;
@@ -75,23 +81,35 @@ void display_task(){
 
 void led_task() {
   while (true) {
-    hal_set_rgb_color(COLOR_RED);
-    ledStatus = LED_RED;
-    vTaskDelay(1000);
-    hal_set_rgb_color(COLOR_GREEN);
-    ledStatus = LED_GREEN;
-    vTaskDelay(1000);
-    hal_set_rgb_color(COLOR_BLUE);
-    ledStatus = LED_BLUE;
+    if(xSemaphoreTake(xLedSemaphore, portMAX_DELAY) == pdTRUE){
+      switch (ledStatus){
+        case LED_RED:
+          hal_set_rgb_color(COLOR_GREEN);
+          ledStatus = LED_GREEN;
+          break;
+        case LED_GREEN:
+          hal_set_rgb_color(COLOR_BLUE);
+          ledStatus = LED_BLUE;
+          break;
+        case LED_BLUE:
+          hal_set_rgb_color(COLOR_RED);
+          ledStatus = LED_RED;
+          break;
+      }
+      xSemaphoreGive(xLedSemaphore);
+    }
     vTaskDelay(1000);
   }
 }
 
 void buzzer_task(){
   while (true){
-    buzzerStatus = BUZZER_ON;
-    hal_double_beep(250);
-    buzzerStatus = BUZZER_OFF;
+    if (xSemaphoreTake(xBuzzerSemaphore, portMAX_DELAY) == pdTRUE){
+      buzzerStatus = BUZZER_ON;
+      hal_double_beep(250);
+      buzzerStatus = BUZZER_OFF;
+      xSemaphoreGive(xBuzzerSemaphore);
+    }
     vTaskDelay(2000); // Aguarda 2 segundos antes de tocar novamente
   }
 }
@@ -99,45 +117,51 @@ void buzzer_task(){
 void button_task(){
   while (true){
     if (hal_button_a_single_press()){
-      if (!led_task_running){
+      //Tarefa estava parada, ativando
+      if (uxSemaphoreGetCount(xLedSemaphore) == 0){
         led_task_running = true;
-        vTaskResume(led_task_handle);
+        xSemaphoreGive(xLedSemaphore);
+      //Tarefa estava ativa, suspendendo
       } else {
         led_task_running = false;
-        vTaskSuspend(led_task_handle);
+        xSemaphoreTake(xLedSemaphore, 0);
       }
     } 
     if (hal_button_b_single_press()){
-      if (!buzzer_task_running){
+      if (uxSemaphoreGetCount(xBuzzerSemaphore) == 0){
         buzzer_task_running = true;
-        vTaskResume(buzzer_task_handle);
+        xSemaphoreGive(xBuzzerSemaphore);
       } else {
         buzzer_task_running = false;
-        vTaskSuspend(buzzer_task_handle);
+        xSemaphoreTake(xBuzzerSemaphore, 0);
       }
     }
     vTaskDelay(10); 
   }
 }
 
+
 int main() {
-  stdio_init_all();
-    hal_ssd1306_init(); // Inicializa o display OLED SSD1306 com comunicação I2C.
-    hal_buzzer_init(); // Inicializa o buzzer.
-    hal_buttons_init(); // Inicializa os botões.
-    hal_init_rgb_led(); // Inicializa o LED RGB.
+   stdio_init_all();
+   hal_ssd1306_init(); // Inicializa o display OLED SSD1306 com comunicação I2C.
+   hal_buzzer_init(); // Inicializa o buzzer.
+   hal_buttons_init(); // Inicializa os botões.
+   hal_init_rgb_led(); // Inicializa o LED RGB.
     
-    hal_ssd1306_clear();
-    hal_ssd1306_draw_string(0, 0, "BitDogLab RTOS  ");
-    hal_ssd1306_draw_string(0, 1, "Free RTOS Demo  ");
-    hal_ssd1306_draw_string(0, 2, "by pedrohdavelar");
-    hal_ssd1306_draw_string(0, 5, "Pressione       ");      
-    hal_ssd1306_draw_string(0, 6, "  qualquer botao");
-    hal_ssd1306_draw_string(0, 7, "para iniciar!   ");
-    hal_ssd1306_render();
-    hal_wait_button_press();
+  hal_ssd1306_clear();
+  hal_ssd1306_draw_string(0, 0, "BitDogLab RTOS  ");
+  hal_ssd1306_draw_string(0, 1, "Free RTOS Demo  ");
+  hal_ssd1306_draw_string(0, 2, "by pedrohdavelar");
+  hal_ssd1306_draw_string(0, 5, "Pressione       ");      
+  hal_ssd1306_draw_string(0, 6, "  qualquer botao");
+  hal_ssd1306_draw_string(0, 7, "para iniciar!   ");
+  hal_ssd1306_render();
+  hal_wait_button_press();
 
-
+  xLedSemaphore = xSemaphoreCreateBinary();
+  xBuzzerSemaphore = xSemaphoreCreateBinary();
+  xSemaphoreGive(xLedSemaphore);
+  xSemaphoreGive(xBuzzerSemaphore);
 
   xTaskCreate(led_task, "LED_Task", 256, NULL, 1, &led_task_handle);
   xTaskCreate(buzzer_task, "Buzzer_Task", 256, NULL, 1, &buzzer_task_handle);
