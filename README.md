@@ -41,6 +41,23 @@ Após esse acionamento, o programa irá executar as tasks ativadas, exibindo no 
 ![image](https://github.com/user-attachments/assets/aedac04f-b380-4e3a-99b0-464d9d923fd3)
 
 Video: https://www.youtube.com/shorts/j6pyCCiNvGw
+
+##Reflexões
+
+1)O que acontece se todas as tarefas tiverem a mesma prioridade?
+
+Manter as tarefas com a mesma prioridade poderia causar falhas de comunicação com o display OLED. Como o display é o periférico que mais consome CPU, foi dada a sua tarefa uma prioridade maior.
+Para a leitura dos botões, não foi observada uma necessidade de maior prioridade, mas isso pode mudar com o aumento da quantidade e complexidade de outras tarefas.
+
+2) Qual tarefa consome mais tempo da CPU?
+
+O display OLED e sua tarefa são os maiores consumidores de CPU
+
+3) Quais seriam os riscos de usar polling sem prioridades?
+
+O uso de polling sem prioridades poderia causar problemas na comunicação com o display OLED. Na primeira versão do programa, usando vTaskSuspend e vTaskResume, havia uma falha ao suspender a task
+do buzzer durante sua execução, causando uma toca ininterrupta do mesmo; ao alterar o programa para o uso de semáforos, este erro deixou de ocorrer.
+
 ---
 
 ## 📜 Licença
