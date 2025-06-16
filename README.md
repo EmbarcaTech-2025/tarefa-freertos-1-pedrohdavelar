@@ -40,15 +40,7 @@ Ao iniciar o programa, é mostrada uma tela de apresentação, e o programa inic
 Após esse acionamento, o programa irá executar as tasks ativadas, exibindo no display OLED o status:
 ![image](https://github.com/user-attachments/assets/aedac04f-b380-4e3a-99b0-464d9d923fd3)
 
-<iframe
-	width="315"
-	height="560"
-	src="https://www.youtube.com/embed/j6pyCCiNvGw"
-	title="YouTube video player"
-	frameborder="0"
-	allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-	allowfullscreen
-></iframe>
+Video: https://www.youtube.com/shorts/j6pyCCiNvGw
 ---
 
 ## 📜 Licença
